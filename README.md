@@ -35,4 +35,4 @@ KSoundPlayer Plugin API by khjxiaogu
 1. 第一代 API https://api.hibai.com/ Copyright 2019 鼻子亲了脸
 2. 第二代 API https://api.bzqll.com/ Copyright 2019 鼻子亲了脸
 3. 第三代 API https://api.itooi.cn/ Copyright 2019 鼻子亲了脸
-4. 第四代 API  https://v1.itooi.cn Copyright 2019 鼻子亲了脸
+4. 第四代 API  https://v1.itooi.cn/ Copyright 2019 鼻子亲了脸
