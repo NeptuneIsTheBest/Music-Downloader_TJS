@@ -25,14 +25,17 @@ LRC歌词
 
 ### 请尽情使用吧！
 ---
-## 关于
+## 关于&感谢
 Copyright (C) 2015 一个二百五2 All Rights Reserved.版权所有  
 KSoundPlayer Plugin API by khjxiaogu  
 ### 使用了开源项目
 1. [Rain120/qq-music-api](https://github.com/Rain120/qq-music-api)
 2. [Binaryify/NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
-### 使用了（或曾经使用过）这些API
-1. 第一代 API https://api.hibai.com/ Copyright 2019 鼻子亲了脸
-2. 第二代 API https://api.bzqll.com/ Copyright 2019 鼻子亲了脸
-3. 第三代 API https://api.itooi.cn/ Copyright 2019 鼻子亲了脸
-4. 第四代 API  https://v1.itooi.cn/ Copyright 2019 鼻子亲了脸
+3. [jsososo/QQMusicApi](https://github.com/jsososo/QQMusicApi)
+### 曾经使用过这些API
+1. https://api.hibai.com/ Copyright 2019 鼻子亲了脸
+2. https://api.bzqll.com/ Copyright 2019 鼻子亲了脸
+3. https://api.itooi.cn/ Copyright 2019 鼻子亲了脸
+4. https://v1.itooi.cn/ Copyright 2019 鼻子亲了脸
+  
+感谢这些开源项目和API的作者们，没有你们就不会有这个项目
