@@ -1,4 +1,4 @@
-# Music_Downloader_TJS 
+# Music Downloader TJS 
 使用KRKR引擎，TJS语言制作的网易云音乐 / QQ音乐下载器，支持下载MP3，MV，歌词和查看专辑图片与评论 
   
 ✨✨遇到问题请多通过程序自带的问题反馈与我联系，或者在这里提交Issues！！！✨✨  
