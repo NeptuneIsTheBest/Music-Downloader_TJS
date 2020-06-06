@@ -11,7 +11,7 @@
 
 ×¢Òâ£ºÄ¿Ç°Ö»Ö§³Ö±ê×¼ÒôÖÊÏÂÔØ
 
-20190908 Hotfix5
+20200428 Hotfix5
 1.ÓÉÓÚÖ®Ç°µÚÈı·½APIÂÉÊ¦º¯Ô­Òò¹Ø±Õ
 QQÒôÀÖ²¿·Ö£º¸èÇúËÑË÷£¨¿ÉÓÃ£©£¬¸èÇúÏÂÔØ£¨±ê×¼ÒôÖÊ¿ÉÓÃ£©£¬LRCÏÂÔØ£¨¿ÉÓÃ£©£¬MVÏÂÔØ£¨¿ÉÓÃ£©£¬×¨¼­Í¼Æ¬ÏÔÊ¾£¨¿ÉÓÃ£©£¬ÆÀÂÛ£¨²»¿ÉÓÃ£©
 ×é¼ş»ù±¾»Ö¸´Íê³É
@@ -24,11 +24,11 @@ QQÒôÀÖ²¿·Ö£º¸èÇúËÑË÷£¨¿ÉÓÃ£©£¬¸èÇúÏÂÔØ£¨±ê×¼ÒôÖÊ¿ÉÓÃ£©£¬LRCÏÂÔØ£¨¿ÉÓÃ£©£¬MVÏÂÔØ£
 //Ä¿Ç° ½Ó¿ÚÓÉÍâ²¿Ìá¹© Ê¹ÓÃÁËµÚÈı·½¿ªÔ´ÏîÄ¿ https://github.com/Rain120/qq-music-api
 
 //========================================================================================
-var QQMSVersion = "1.5.1546";
-var QQMSVersionString = QQMSVersion + 'Released in 20200319';
+var QQMSVersion = "1.6.0107";
+var QQMSVersionString = QQMSVersion + 'Released in 20200606';
 
-var QHttpRequestVersion = "0.6.5";
-var QQMusicServiceVersion = "0.12.5";
+var QHttpRequestVersion = "0.6.7";
+var QQMusicServiceVersion = "0.12.9";
 
 try{
 	if (AUP.filelist !== void){
@@ -99,7 +99,7 @@ class QHttpRequest extends HttpRequest{
 					HRGetDataString[0] = HRGetData;
 					HRGetDataString.save(System.exePath + "HRGetData_raw.txt");
 				}
-				ChangetoJSON();
+				ConvertfromJSON();
 				if ( debugmode )
 					(Dictionary.saveStruct incontextof HRGetDataJSON)(System.exePath + "HRGetData_json.txt");
 			}else{
@@ -140,7 +140,7 @@ class QHttpRequest extends HttpRequest{
 		}
 	}
 
-	function ChangetoJSON() {
+	function ConvertfromJSON() {
 		try{
 			var start;
 			var num;
@@ -257,6 +257,7 @@ class QQMusicService{
 			Song_list[i] = %[];
 			Song_list[i].media_mid = HRClass.HRGetDataJSON.data.song.list[i].file.media_mid;
 			Song_list[i].song_mid = HRClass.HRGetDataJSON.data.song.list[i].mid;
+			Song_list[i].song_id = HRClass.HRGetDataJSON.data.song.list[i].id;
 			Song_list[i].title = HRClass.HRGetDataJSON.data.song.list[i].title;
 			if ( HRClass.HRGetDataJSON.data.song.list[i].subtitle !== "")
 				Song_list[i].title = Song_list[i].title + "(" + HRClass.HRGetDataJSON.data.song.list[i].subtitle +")";
@@ -325,12 +326,12 @@ class QQMusicService{
 	function returnViews(){
 		var i;
 		Song_views = [];
-		for(i = 0; i < HRClass.HRGetDataJSON.data.commentlist.count; i++){
+		for(i = 0; i < HRClass.HRGetDataJSON.data.comment.commentlist.count; i++){
 			Song_views[i] = %[];
-			Song_views[i].username = HRClass.HRGetDataJSON.data.commentlist[i].nick;
-			Song_views[i].viewtext = HRClass.HRGetDataJSON.data.commentlist[i].rootcommentcontent;
-			Song_views[i].userpicture = HRClass.HRGetDataJSON.data.commentlist[i].avatarurl;
-			Song_views[i].time = HRClass.HRGetDataJSON.data.commentlist[i].time;
+			Song_views[i].username = HRClass.HRGetDataJSON.data.comment.commentlist[i].nick;
+			Song_views[i].viewtext = HRClass.HRGetDataJSON.data.comment.commentlist[i].rootcommentcontent;
+			Song_views[i].userpicture = HRClass.HRGetDataJSON.data.comment.commentlist[i].avatarurl;
+			Song_views[i].time = HRClass.HRGetDataJSON.data.comment.commentlist[i].time;
 		}
 		getViewsListStatus = "COMPLETED";
 		Debug.message("return Song views list: "+Song_views);
@@ -353,16 +354,22 @@ class QQMusicService{
 
 	//ÆÕÍ¨£¨48)	±ê×¼£¨96£© ±ê×¼£¨128£© ½Ï¸ß£¨192£© ¼«¸ß£¨320£©
 	//ÎŞËğ£¨ape£© ÎŞËğ£¨flac£© Hi-Res£¨flac£© DSD£¨dff£©
+	var MusicDownload_savePath;
 	function getMusicDownload(song_mid, filename = System.createUUID(), br = 320, savePath = System.exePath + "Download/"){
 		DownloadMusicStatus = "UNINITIALIZED";
 		//var url = URL_root + "url?id="+song_mid+"&quality="+br;
-		var url = "https://v1.itooi.cn/tencent/url?id=" + song_mid + "&quality=" + br + "&isRedirect=1";
+		var url = "http://api.ac130.tk:3300/song/url?id=" + song_mid + "&type=" + br;
 		HRClass.open("GET",url);
 		DownloadMusicStatus = "OPEN";
 		if(!Storages.isExistentStorage(savePath)){
 			var text = [];
 			text[0] = "This is the download path.";
-			text.save(savePath + "readme.txt");
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("ÏÂÔØÄ¿Â¼ÉèÖÃ¿ÉÄÜÓĞÎó£¬Çë¼ì²éÏÂÔØÄ¿Â¼");
+				return 0;
+			}
 		}
 		if ( br == "48" || br == "96"){
 			if (Storages.extractStorageExt(filename) !== ".m4a")
@@ -381,8 +388,9 @@ class QQMusicService{
 				filename = filename + ".ape";
 		}
 		filename = filename.replace(addressCheck,"_");
+		MusicDownload_savePath = savePath + filename;
 		try{
-			HRClass.send(void, savePath + filename);
+			HRClass.send(HRClass.HRGetData);
 		}catch(e){
 			Debug.message(e.message);
 			System.inform("Óë·şÎñÆ÷Í¨ĞÅÊ±³öÏÖÁË´íÎó£¬ÎÄ¼ş´íÎó£¬¿ÉÄÜÊÇÎÄ¼ş±»Ëø¶¨»òÂ·¾¶ÎŞ·¨·ÃÎÊ£¬ÇëÖØÆô³ÌĞòºóÖØÊÔ");
@@ -393,6 +401,21 @@ class QQMusicService{
 		return savePath + filename;
 	}
 
+	function DownloadMusic(savePath = MusicDownload_savePath){
+		if(HRClass.HRGetDataJSON.result == "100" && HRClass.HRGetDataJSON.data != void && HRClass.HRGetDataJSON.data.trim() !== ""){
+			DownloadMusicStatus = "OPEN 2";
+			var url = HRClass.HRGetDataJSON.data;
+			HRClass.open("GET", url);
+			HRClass.send(void, savePath);
+			DownloadMusicStatus = "SEND 2";
+			Debug.message("Url:" + url);
+			return savePath;
+		}else{
+			System.inform(HRClass.HRGetDataJSON.result + ":" + HRClass.HRGetDataJSON.errMsg);
+			return HRClass.HRGetDataJSON.result;
+		}
+	}
+
 	function getMusicPicDownload(song_mid, filename = song_mid, savePath = System.exePath + "Temp/"){
 		DownloadMusicPicStatus = "UNINITIALIZED";
 		var url = "http://y.gtimg.cn/music/photo_new/T002R300x300M000" + song_mid + ".jpg";
@@ -401,7 +424,12 @@ class QQMusicService{
 		if(!Storages.isExistentStorage(savePath)){
 			var text = [];
 			text[0] = "This is the Temp path.";
-			text.save(savePath + "readme.txt");
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("ÏÂÔØÄ¿Â¼ÉèÖÃ¿ÉÄÜÓĞÎó£¬Çë¼ì²éÏÂÔØÄ¿Â¼");
+				return 0;
+			}
 			try{
 				Storages.setFileAttributes(savePath, FILE_ATTRIBUTE_HIDDEN);
 			}catch(e){
@@ -488,7 +516,12 @@ class QQMusicService{
 		if(!Storages.isExistentStorage(savePath)){
 			var text = [];
 			text[0] = "This is the download path.";
-			text.save(savePath + "readme.txt");
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("ÏÂÔØÄ¿Â¼ÉèÖÃ¿ÉÄÜÓĞÎó£¬Çë¼ì²éÏÂÔØÄ¿Â¼");
+				return 0;
+			}
 		}
 		if (Storages.extractStorageExt(filename) !== ".mp4"){
 			filename = filename + ".mp4";
@@ -506,9 +539,9 @@ class QQMusicService{
 		return savePath + filename;
 	}
 
-	function getViewsList( song_mid, page = 0, pageSize = 30){
+	function getViewsList( song_mid, page = 1, pageSize = 20, type = 0, biztype = 1){
 		getViewsListStatus = "UNINITIALIZED";
-		var url = API_URL_root + "comment/song?id=" + song_mid + "&page=" + page + "&pageSize=" + pageSize;
+		var url = "http://api.ac130.tk:3300/comment?id=" + song_mid + "&pageNo=" + page + "&pageSize=" + pageSize + "&type=" + type+ "&biztype=" + biztype;
 		HRClass.open("GET",url);
 		getViewsListStatus = "OPEN";
 		HRClass.send(HRClass.HRGetData);
@@ -528,8 +561,9 @@ class QQMusicService{
 	function downloadSongCheck(){
 		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
 			DownloadMusicTimer.enabled = 0;
-			DownloadMusicStatus = "COMPLETED";
+			DownloadMusicStatus = "COMPLETED 1";
 			Debug.message(HRClass.HRGetData);
+			DownloadMusic();
 		}
 	}
 

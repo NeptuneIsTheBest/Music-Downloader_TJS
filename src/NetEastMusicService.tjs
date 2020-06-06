@@ -18,11 +18,11 @@
 //目前 使用了第三方开源项目 Binaryify/NeteaseCloudMusicApi https://github.com/Binaryify/NeteaseCloudMusicApi
 
 //========================================================================================
-var NEMSVersion = "0.2.2323";
-var NEMSVersionString = NEMSVersion + 'Released in 20200302';
+var NEMSVersion = "0.2.2325";
+var NEMSVersionString = NEMSVersion + 'Released in 20200606';
 
-var NEMHttpRequestVersion = "0.6.5";
-var NEMusicServiceVersion = "0.3.3";
+var NEMHttpRequestVersion = "0.6.6";
+var NEMusicServiceVersion = "0.3.4";
 
 try{
 	if (AUP.filelist !== void){
@@ -77,7 +77,7 @@ class NEMHttpRequest extends HttpRequest{
 					HRGetDataString[0] = HRGetData;
 					HRGetDataString.save(System.exePath + "HRGetData_raw.txt");
 				}
-				ChangetoJSON();
+				ConvertfromJSON();
 				if ( debugmode )
 					(Dictionary.saveStruct incontextof HRGetDataJSON)(System.exePath + "HRGetData_json.txt");
 			}else{
@@ -118,7 +118,7 @@ class NEMHttpRequest extends HttpRequest{
 		}
 	}
 
-	function ChangetoJSON() {
+	function ConvertfromJSON() {
 		try{
 			var start;
 			var num;
@@ -346,6 +346,9 @@ class NEMusicService{
 		MusicDownload_url = "";
 		MusicDownload_filename = filename;
 		MusicDownload_savePath = savePath;
+		if(br == 'flac'){
+			br = 999;
+		}
 		var url = API_URL_root + "song/url?id=" + song_mid + "&br=" + br * 1000;
 		HRClass.open("GET",url);
 		DownloadMusicStatus = "OPEN";
@@ -358,6 +361,9 @@ class NEMusicService{
 	function Checkmusicurl(){
 		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
 			MusicDownloadURLCheckTimer.enabled = 0;
+			if (HRClass.HRGetDataJSON.code != "200"){
+				System.inform(HRClass.HRGetDataJSON.result + ":" + HRClass.HRGetDataJSON.msg);
+			}
 			try{
 				MusicDownload_url = HRClass.HRGetDataJSON.data[0].url;
 				startMusicDownload();
