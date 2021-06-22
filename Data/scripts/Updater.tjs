@@ -1,0 +1,194 @@
+//Music Downloader Updater
+//Copyright (C) 2015 一个二百五2 All Rights Reserved.版权所有
+var QMS_MenuSetting_Update = new MenuItem( QMS_searchMainWindow, language.menu.Update);
+QMS_MenuSetting.add( QMS_MenuSetting_Update);
+
+var Updater_Window = new Window();
+Updater_Window.visible = 0;
+
+var QMS_UpdaterDownload = new Layer( QMS_searchMainWindow, QMS_BaseLayer);
+QMS_UpdaterDownload.setPos(0,0,QMS_searchMainWindow.innerWidth,QMS_searchMainWindow.innerHeight);
+QMS_UpdaterDownload.colorRect(0,0,QMS_UpdaterDownload.width,QMS_UpdaterDownload.height,0xFFFFFF,255);
+QMS_UpdaterDownload.visible = 0;
+QMS_UpdaterDownload.font.height = QMS_UpdaterDownload.height * 0.125;
+QMS_UpdaterDownload.drawText( (QMS_UpdaterDownload.width - QMS_UpdaterDownload.font.getTextWidth(language.ui.UpdatePleaseWaitInformText)) / 2, 0, language.ui.UpdatePleaseWaitInformText, 0x000000, 255);
+var Updater_Httpreq = new HttpRequest( Updater_Window);
+var QMS_UpdaterMD5Check = "";
+try{
+    QMS_UpdaterMD5Check = Storages.getMD5HashString(System.exePath + "Updater.exe");
+}catch(e){
+    Debug.message(e.message);
+}
+if ( QMS_UpdaterMD5Check !== "24238e34a047937953208d2464774239" ){
+    Updater_Httpreq.open( "GET", "https://raw.githubusercontent.com/NeptuneIsTheBest/Music-Downloader_TJS/master/Music_Downloader/Updater.exe");
+    Updater_Httpreq.send( void, System.exePath + "Updater.exe");
+    QMS_UpdaterDownload.visible = 1;
+    QMS_UpdaterDownload.bringToFront();
+    QMS_MenuSetting_Update.visible = 0;
+}
+var Updater_HRGetData; //储存JSON转换后格式
+var Updater_checkUpdatesuccess = false;
+var Updater_downloadUpdatesuccess = false;
+var Updater_onProgressPercent;
+var Updater_getPackagejsonTimer = new Timer(checkPackagejson, "");
+Updater_getPackagejsonTimer.invertal = 10;
+Updater_getPackagejsonTimer.enabled = 0;
+var Updater_getUpdateTimer = new Timer(checkUpdate, "");
+Updater_getUpdateTimer.invertal = 10;
+Updater_getUpdateTimer.enabled = 0;
+
+var Updater_getPackagejsonTimer_startup = new Timer(checkPackagejson_startup, "");
+Updater_getPackagejsonTimer_startup.invertal = 10;
+Updater_getPackagejsonTimer_startup.enabled = 0;
+function Updater_getPackagejson_startup(){
+    QMS_MenuInformDisplay.caption = language.menu.UpdateCheckStartMenuInform;
+    Updater_checkUpdatesuccess = false;
+    var url = "https://raw.githubusercontent.com/NeptuneIsTheBest/Music-Downloader_TJS/master/package.json";
+    Updater_Httpreq.open( "GET", url);
+    Updater_Httpreq.send( Updater_Httpreq.getResponseText() );
+    Updater_getPackagejsonTimer_startup.enabled = 1;
+}
+function checkPackagejson_startup(){
+    if ( Updater_checkUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = language.menu.UpdateCheckSuccessfulMenuInform;
+        if ( checkVersion(QMS_MainVersion ,Updater_HRGetData.version) ){
+            QMS_MenuInformDisplay.caption = language.menu.UpdateAlreadyLastestMenuInform;
+        }else{
+            QMS_MenuInformDisplay.caption = language.menu.UpdateFindNewMenuInform;
+        }
+        Updater_getPackagejsonTimer_startup.enabled = 0;
+    }else if ( !Updater_checkUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = language.menu.UpdateCheckFailMenuInform;
+        Updater_getPackagejsonTimer_startup.enabled = 0;
+    }
+}
+var startupupdateTimer = new Timer(startupcheckUpdate,"");
+startupupdateTimer.enabled = 1;
+startupupdateTimer.invertal = 100;
+function startupcheckUpdate(){
+    if( Updater_Httpreq.readyState == 1 || Updater_Httpreq.readyState == 4 || Updater_Httpreq.readyState == 0){
+        Updater_getPackagejson_startup();
+        startupupdateTimer.enabled = 0;
+    }
+}
+
+var QMS_UpdateLayer = new Layer( QMS_searchMainWindow, QMS_BaseLayer);
+QMS_UpdateLayer.setPos(0,0,QMS_searchMainWindow.innerWidth,QMS_searchMainWindow.innerHeight);
+QMS_UpdateLayer.colorRect(0,0,QMS_UpdateLayer.width,QMS_UpdateLayer.height,0xFFFFFF,255);
+QMS_UpdateLayer.visible = 0;
+QMS_UpdateLayer.font.height = QMS_UpdateLayer.height * 0.125;
+QMS_UpdateLayer.drawText( (QMS_UpdateLayer.width - QMS_UpdateLayer.font.getTextWidth(language.menu.Update)) / 2, 0, language.menu.Update, 0x000000, 255);
+var QMS_UpdateLayer_Text = new Layer( QMS_searchMainWindow, QMS_UpdateLayer);
+QMS_UpdateLayer_Text.setPos(0,QMS_UpdateLayer.height * 0.125,QMS_UpdateLayer.width,QMS_UpdateLayer.height - QMS_UpdateLayer.height * 0.125);
+QMS_UpdateLayer_Text.colorRect(0,0,QMS_UpdateLayer_Text.width,QMS_UpdateLayer_Text.height,0xFFFFFF,255);
+QMS_UpdateLayer_Text.visible = 1;
+var QMS_UpdateLayer_Back = new QMS_ButtonLayer(QMS_UpdateLayer, 0, 0, QMS_UpdateLayer.width * 0.175, QMS_UpdateLayer.height * 0.125, "<" + language.ui.GoBackButton);
+QMS_MenuSetting_Update.onClick = function{
+    QMS_UpdateLayer.visible = 1;
+    QMS_UpdateLayer.bringToFront();
+    QMS_UpdateLayer_Text.bringToFront();
+    Updater_getPackagejson();
+};
+QMS_UpdateLayer_Back.onClick = function{
+    QMS_UpdateLayer.visible = 0;
+};
+QMS_UpdateLayer_Text.font.height = QMS_UpdateLayer.height * 0.09;
+
+function Updater_getPackagejson(){
+    QMS_MenuInformDisplay.caption = language.menu.UpdateCheckStartMenuInform;
+    QMS_UpdateLayer_Text.colorRect(0,0,QMS_UpdateLayer_Text.width,QMS_UpdateLayer_Text.height,0xFFFFFF,255);
+    QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("正在检查更新...")) / 2, 0, "正在检查更新...", 0x000000, 255);
+    Updater_checkUpdatesuccess = false;
+    var url = "https://raw.githubusercontent.com/NeptuneIsTheBest/Music-Downloader_TJS/master/package.json";
+    Updater_Httpreq.open( "GET", url);
+    Updater_Httpreq.send( Updater_Httpreq.getResponseText() );
+    Updater_getPackagejsonTimer.enabled = 1;
+}
+
+function Updater_downloadUpdate(){
+    QMS_MenuInformDisplay.caption = "开始下载更新";
+    QMS_UpdateLayer_Text.colorRect(0,0,QMS_UpdateLayer_Text.width,QMS_UpdateLayer_Text.height,0xFFFFFF,255);
+    QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("正在下载更新")) / 2, 0, "正在下载更新", 0x000000, 255);
+    QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion)) / 2, QMS_UpdateLayer_Text.font.height + 1, "最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion, 0x000000, 255);
+    Updater_downloadUpdatesuccess = false;
+    var url = "https://raw.githubusercontent.com/NeptuneIsTheBest/Music-Downloader_TJS/master/Music_Downloader/Music_Downloader.exe";
+    Updater_Httpreq.open( "GET", url);
+    try{
+        var readme = [];
+        readme[0] = "更新下载目录";
+        readme.save(System.exePath + "Update/readme.txt");
+    }catch(e){
+    }
+    Updater_Httpreq.send( void, System.exePath + "Update/Music_Downloader.exe");
+    Updater_getUpdateTimer.enabled = 1;
+}
+
+function checkUpdate(){
+    if (Updater_downloadUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = "正在下载更新 100%";
+        QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("下载完成")) / 2, QMS_UpdateLayer_Text.font.height * 2, "下载完成", 0x000000, 255);
+        QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("请关闭该主程序")) / 2, QMS_UpdateLayer_Text.font.height * 3, "请关闭该主程序", 0x000000, 255);
+        Updater_getUpdateTimer.enabled = 0;
+        try{
+            QMS_UpdaterMD5Check = Storages.getMD5HashString(System.exePath + "Updater.exe");
+        }catch(e){
+            Debug.message(e.message);
+        }
+        if ( QMS_UpdaterMD5Check !== "24238e34a047937953208d2464774239" ){
+            System.inform("自动更新器出现问题，请重新启动应用程序后再进行更新");
+            System.exit();
+        }
+        System.shellExecute("Updater.exe");
+        System.exit();
+    }else if( !Updater_downloadUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = "正在下载更新 " + Updater_onProgressPercent;
+        Updater_getUpdateTimer.enabled = 0;
+    }
+    QMS_MenuInformDisplay.caption = "正在下载更新 " + Updater_onProgressPercent;
+}
+
+function checkPackagejson(){
+    if ( Updater_checkUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = language.menu.UpdateCheckSuccessfulMenuInform;
+        QMS_UpdateLayer_Text.colorRect(0,0,QMS_UpdateLayer_Text.width,QMS_UpdateLayer_Text.height,0xFFFFFF,255);
+        if ( checkVersion(QMS_MainVersion ,Updater_HRGetData.version) ){
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("已经是最新版本")) / 2, 0, "已经是最新版本", 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion)) / 2, QMS_UpdateLayer_Text.font.height + 1, "最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion, 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("QQ音乐组件版本：" + QQMSVersionString) ) / 2, (QMS_UpdateLayer_Text.font.height +1) * 2, "QQ音乐组件版本：" + QQMSVersionString, 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("网易云音乐组件版本：" + NEMSVersionString) ) / 2, (QMS_UpdateLayer_Text.font.height +1) * 3, "网易云音乐组件版本：" + NEMSVersionString, 0x000000, 255);
+        }else{
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("检测到新版本")) / 2, 0, "检测到新版本", 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion)) / 2, QMS_UpdateLayer_Text.font.height + 1, "最新版本：" + Updater_HRGetData.version + "  " + "目前版本：" + QMS_MainVersion, 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("QQ音乐组件版本：" + QQMSVersionString) ) / 2, (QMS_UpdateLayer_Text.font.height +1) * 2, "QQ音乐组件版本：" + QQMSVersionString, 0x000000, 255);
+            QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("网易云音乐组件版本：" + NEMSVersionString) ) / 2, (QMS_UpdateLayer_Text.font.height +1) * 3, "网易云音乐组件版本：" + NEMSVersionString, 0x000000, 255);
+            Updater_downloadUpdate();
+        }
+        Updater_getPackagejsonTimer.enabled = 0;
+    }else if ( !Updater_checkUpdatesuccess && Updater_Httpreq.readyState == global.HttpRequest.LOADED){
+        QMS_MenuInformDisplay.caption = language.menu.UpdateCheckFailMenuInform;
+        QMS_UpdateLayer_Text.drawText( (QMS_UpdateLayer_Text.width - QMS_UpdateLayer_Text.font.getTextWidth("检查更新失败")) / 2, QMS_UpdateLayer_Text.font.height + 1, "检查更新失败", 0x000000, 255);
+        Updater_getPackagejsonTimer.enabled = 0;
+    }
+}
+
+Updater_Httpreq.onReadyStateChange = function( readyState){
+    Debug.message("Updater readyState:%d".sprintf(readyState));
+    if (readyState == global.HttpRequest.LOADED){
+        Debug.message("Updater GetDataJSON: " + Updater_Httpreq.getResponseText());
+        try{
+            Updater_HRGetData = Scripts.evalJSON( Updater_Httpreq.getResponseText() );
+            Debug.message("Updater GetData: " + Updater_HRGetData);
+            Updater_checkUpdatesuccess = true;
+        }catch(e){
+            Debug.message(e.message);
+            Updater_checkUpdatesuccess = false;
+        }
+        Updater_downloadUpdatesuccess = true;
+        QMS_UpdaterDownload.visible = 0;
+        QMS_MenuSetting_Update.visible = 1;
+    }
+};
+
+Updater_Httpreq.onProgress = function( upload, percent){
+    Updater_onProgressPercent = percent + "%";
+};

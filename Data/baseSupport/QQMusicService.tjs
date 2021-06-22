@@ -1,0 +1,603 @@
+//QQMusicService 用于从QQ音乐获取数据的API
+//Copyright (C) 2015 一个二百五2 All Rights Reserved.版权所有
+
+/*
+
+*****注意：以下插件
+httprequest.dll、json.dll、systemEX.dll saveStruct.dll saveStruct.dll
+必须被放入目录中，否则会报错（必选）*****
+*****注意：如果有fstat.dll 可以获得更好的文件储存支持（可选）*****
+
+部分启用Https协议，支持MP3（多码率），flac，ape下载
+歌曲下载可选码率类型（参数 br）：48（标准） 96（高清） 320（高品质） flac（无损音质） ape（压缩无损音质）
+*/
+
+//第一代 API https://api.hibai.com/ Copyright 2019 鼻子亲了脸
+//第二代 API https://api.bzqll.com/ Copyright 2019 鼻子亲了脸
+//第三代 API https://api.itooi.cn/ Copyright 2019 鼻子亲了脸
+//第四代 API  https://v1.itooi.cn Copyright 2019 鼻子亲了脸
+//目前 接口由外部提供 使用了第三方开源项目 https://github.com/Rain120/qq-music-api
+//同时使用了第三方开源项目 https://github.com/jsososo/QQMusicApi
+
+//========================================================================================
+var QQMSVersion = "1.6.0112";
+var QQMSVersionString = QQMSVersion + 'Released in 20210116';
+
+var QHttpRequestVersion = "0.6.8";
+var QQMusicServiceVersion = "0.12.13";
+
+try{
+	if (AUP.filelist !== void){
+		AUP.filelist[AUP.filelist.count] = %[];
+		AUP.filelist[AUP.filelist.count].filename = "QQMusicService.tjs";
+		AUP.filelist[AUP.filelist.count].version = QQMSVersion;
+	}
+}catch(e){
+	Debug.message("无法找到AUP(AC Update Component)");
+}
+
+try{
+	Plugins.link("httprequest.dll");
+	Plugins.link("json.dll");
+	Plugins.link("systemEX.dll");
+}catch(e){
+	System.inform(e.message,"QQMusicService组件运行时错误");
+	return 0;
+}
+
+class QHttpRequest extends HttpRequest{
+
+	property verison{
+		getter{
+			return QHttpRequestVersion;
+		}
+	}
+
+	var HRGetData;
+	var HRGetDataJSON;
+	var QHttpRequest_Guid;
+	var HRProgressPercent = 0;
+	var HRProgressLeftTime = 0;
+	var HRProgressStartTime = 0;
+	var HRProgressEndTime = 0;
+	var HRProgressLastPercent = 0;
+	var debugmode;
+
+	function QHttpRequest(Window, debugmodeset = false){
+		var RG = new Math.RandomGenerator();
+		var RGNumber;
+		debugmode = debugmodeset; //开发者模式
+		RG.randomize();
+		while (true){
+			RGNumber = RG.random32();
+			if(RGNumber > 9999999999 || RGNumber < 1000000000){
+				continue;
+			}else{
+				break;
+			}
+		}
+		var guid = RGNumber;
+		QHttpRequest_Guid = guid;
+		super.HttpRequest(Window, true ,"Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.105 Safari/537.36");
+		this.setRequestHeader("Cookie" ,"pgv_pvid="+guid+"; ts_uid=1596880404; pgv_pvi=9708980224; yq_index=0; pgv_si=s3191448576; pgv_info=ssid=s8059271672; ts_refer=ADTAGmyqq; yq_playdata=s; ts_last=y.qq.com/portal/player.html; yqq_stat=0; yq_playschange=0; player_exist=1; qqmusic_fromtag=66; yplayer_open=1");
+		this.setRequestHeader("Accept", "*/*");
+		this.setRequestHeader("Referer", "https://y.qq.com/portal/player.html");
+		this.setRequestHeader("Accept-Language", "zh-CN,zh;q=0.8");
+	}
+
+	function onReadyStateChange(readyState){
+		Debug.message("QHttpRequest readyState:%d".sprintf(readyState));
+		if (readyState == global.HttpRequest.LOADED){
+			if ( 100 <= status <= 207){
+				HRGetData = getResponseText();
+				if ( debugmode ){
+					var HRGetDataString = [];
+					HRGetDataString[0] = HRGetData;
+					HRGetDataString.save(System.exePath + "HRGetData_raw.txt");
+				}
+				ConvertfromJSON();
+				if ( debugmode )
+					(Dictionary.saveStruct incontextof HRGetDataJSON)(System.exePath + "HRGetData_json.txt");
+			}else{
+				System.inform("获取数据时出现错误，" + status + " " + statusText,"QQMusicService组件运行时错误");
+			}
+			Debug.message("QHttpRequest GetData: " + HRGetDataJSON);
+		}
+		HRProgressLastPercent = 0;
+	}
+
+	function returnTime(time){   //关于返回时间的函数 
+		var t1 = time / 1000;
+		var t2 = t1 / 60 + "";
+		var min = int(t2);
+		var s1 = t1 - min * 60 + "";
+		var s = int(s1);
+			if(s<10)
+			{
+				var s="0"+s;
+				var Time = min+":"+s;
+				return Time;
+			}else{
+				var Time = min+":"+s;
+				return Time;
+			}
+	}
+
+	function onProgress(upload, percent){
+		HRProgressEndTime = System.getTickCount();
+		if(percent - HRProgressLastPercent > 1 && (HRProgressEndTime - HRProgressStartTime) > 300){
+			HRProgressLeftTime = this.returnTime((HRProgressEndTime - HRProgressStartTime) * (100 - int(percent)));
+			HRProgressStartTime = System.getTickCount();
+			HRProgressLastPercent = percent;
+		}
+		HRProgressPercent = int(percent) + "%";
+		if (int(percent) == 100){
+			HRProgressLeftTime = this.returnTime(0);
+		}
+	}
+
+	function ConvertfromJSON() {
+		try{
+			var start;
+			var num;
+			var i;
+			var j;
+			if (HRGetData[0] !== "{"){
+				for (i = 0;i < HRGetData.length;i++){
+					if (HRGetData.charAt(i) == "("){
+						start = i;
+						break;
+					}else{
+						continue;
+					}
+				}
+			}
+			if (start == 0)
+				start = -1;
+			HRGetDataJSON = Scripts.evalJSON(HRGetData.substr(start + 1,HRGetData.length - start));
+		}catch (e) {
+			Debug.message(e.message);
+		}
+	}
+}
+
+class QQMusicService{
+
+	property verison{
+		getter{
+			return QQMusicServiceVersion;
+		}
+	}
+
+	var onProgress = false;
+	function isOnProgress(){
+		return onProgress;
+	}
+
+	function MarkOnProgerss(){
+		onProgress = true;
+	}
+
+	function UnmarkOnProgerss(){
+		onProgress = false;
+	}
+
+	var HRClass;
+	var API_URL_root = "http://api.ac130.top:10087/";
+	var addressCheck = new RegExp('[\\\\/:*?\"<>|]','gi');
+	var returnSonglistTimer = new Timer(returnSonglistCheck,"");
+	returnSonglistTimer.invertal = 10;
+	returnSonglistTimer.enabled = 0;
+	var returnSongLrcTimer = new Timer(returnSongLrcCheck,"");
+	returnSongLrcTimer.invertal = 10;
+	returnSongLrcTimer.enabled = 0;
+	var DownloadMusicTimer = new Timer(downloadSongCheck,"");
+	DownloadMusicTimer.invertal = 10;
+	DownloadMusicTimer.enabled = 0;
+	var DownloadMusicPicTimer = new Timer(downloadSongPicCheck,"");
+	DownloadMusicPicTimer.invertal = 10;
+	DownloadMusicPicTimer.enabled = 0;
+	var DownloadMVTimer = new Timer(downloadMVCheck,"");
+	DownloadMVTimer.invertal = 10;
+	DownloadMVTimer.enabled = 0;
+	var returnViewsTimer = new Timer(returnViewsCheck,"");
+	returnViewsTimer.invertal = 10;
+	returnViewsTimer.enabled = 0;
+
+	var Song_Lrc = [];
+	var Song_LrcTranslation = [];
+	var Song_LrcSave = false;
+	var Song_LrcSaveFilename;
+	var Song_LrcSavePath;
+	var Song_LrcSaveUTF8;
+	var Song_list;
+	var Song_views;
+	var getLrcStatus = "UNINITIALIZED";
+	var getSongListStatus = "UNINITIALIZED";
+	var DownloadMusicStatus = "UNINITIALIZED";
+	var DownloadMusicPicStatus = "UNINITIALIZED";
+	var DownloadMVStatus = "UNINITIALIZED";
+	var getViewsListStatus = "UNINITIALIZED";
+
+	function QQMusicService(HRClassName){
+		HRClass = HRClassName;
+	}
+
+	//废弃的方法
+	function getvkey(song_mid, filename, guid = HRClass.QHttpRequest_Guid){
+		var url = 'https://c.y.qq.com/base/fcgi-bin/fcg_music_express_mobile3.fcg?format=json&platform=yqq&cid=205361747&songmid='+song_mid+'&filename='+filename+'&guid='+guid;
+		HRClass.open("GET",url);
+		HRClass.send(HRClass.HRGetData);
+		Debug.message("Url:"+url);
+	}
+
+	//废弃的方法
+	function returnvkey(){
+		var vkey = HRClass.HRGetDataJSON.data.items[0].vkey;
+		return vkey;
+	}
+
+	function search_song(key_Word, page = 1, num = 20){
+		getSongListStatus = "UNINITIALIZED";
+		key_Word = System.urlencode(key_Word);
+		var url = 'https://c.y.qq.com/soso/fcgi-bin/client_search_cp?new_json=1&aggr=1&cr=1&flag_qc=0&p='+page+'&n='+num+'&w='+key_Word;
+		HRClass.open("GET",url);
+		getSongListStatus = "OPEN";
+		HRClass.send(HRClass.HRGetData);
+		getSongListStatus = "SEND";
+		Debug.message("Url:" + url);
+		returnSonglistTimer.enabled = 1;
+	}
+
+	function returnSonglistCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void && HRClass.HRGetDataJSON !== void){
+			returnSonglistTimer.enabled = 0;
+			getSongListStatus = "LOADED";
+			try{
+				returnSonglist();
+			}catch(e){
+				Debug.message(e.message);
+			}
+		}
+	}
+
+	function returnSonglist(){
+		var i;
+		Song_list = [];
+		for(i = 0; i < HRClass.HRGetDataJSON.data.song.list.count; i++){
+			Song_list[i] = %[];
+			Song_list[i].media_mid = HRClass.HRGetDataJSON.data.song.list[i].file.media_mid;
+			Song_list[i].song_mid = HRClass.HRGetDataJSON.data.song.list[i].mid;
+			Song_list[i].song_id = HRClass.HRGetDataJSON.data.song.list[i].id;
+			Song_list[i].title = HRClass.HRGetDataJSON.data.song.list[i].title;
+			if ( HRClass.HRGetDataJSON.data.song.list[i].subtitle !== "")
+				Song_list[i].title = Song_list[i].title + "(" + HRClass.HRGetDataJSON.data.song.list[i].subtitle +")";
+			Song_list[i].singer = HRClass.HRGetDataJSON.data.song.list[i].singer;
+			Song_list[i].album = HRClass.HRGetDataJSON.data.song.list[i].album;
+			Song_list[i].album_id = HRClass.HRGetDataJSON.data.song.list[i].album.mid;
+			Song_list[i].mv_id = HRClass.HRGetDataJSON.data.song.list[i].mv.vid;
+			Song_list[i].newStatus = HRClass.HRGetDataJSON.data.song.list[i].newStatus;
+			Song_list[i].isonly = HRClass.HRGetDataJSON.data.song.list[i].isonly;
+		}
+		getSongListStatus = "COMPLETED";
+		Debug.message("search song keyWord: " +HRClass.HRGetDataJSON.data.keyword);
+		Debug.message("return Songlist: "+Song_list);
+	}
+
+	function returnSongLrcCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void && HRClass.HRGetDataJSON !== void){
+			returnSongLrcTimer.enabled = 0;
+			getLrcStatus = "LOADED";
+			
+			try{
+				var re = new RegExp("&apos;","gi");
+				HRClass.HRGetDataJSON.response.lyric = HRClass.HRGetDataJSON.response.lyric.replace( re, "'");
+				Song_Lrc.assign(HRClass.HRGetDataJSON.response.lyric.split("\n"));
+				var i;
+				var j = 0;
+				var n;
+				for (i = 0; i < Song_Lrc.count; i++){
+					if(Song_Lrc[i].indexOf("[ti:") !== -1){
+						j++;
+					}
+
+					if (j > 1){
+						Song_Lrc.insert(i+1,Song_Lrc[i].substr(Song_Lrc[i].charAt("[ti:")));
+						Song_Lrc[i] = Song_Lrc[i].substr(0,Song_Lrc[i].charAt("[ti:")+1);
+						for (n = 0; n < Song_Lrc.count;){
+							Song_LrcTranslation[n] = Song_Lrc[j+1];
+							Song_Lrc.erase([j+1]);
+						}
+					}
+				}
+			}catch(e){
+				Debug.message(e.message);
+			}
+			getLrcStatus = "COMPLETED";
+			if (Song_LrcSave){
+				Song_Lrc.save2(Song_LrcSavePath + "/" +Song_LrcSaveFilename + ".lrc", Song_LrcSaveUTF8);
+				Debug.message("Outpu to:" + Song_LrcSavePath + "/" +Song_LrcSaveFilename + ".lrc");
+			}
+			Debug.message(Song_Lrc);
+		}
+	}
+
+	function returnViewsCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void && HRClass.HRGetDataJSON !== void){
+			returnViewsTimer.enabled = 0;
+			getViewsListStatus = "LOADED";
+			try{
+				returnViews();
+			}catch(e){
+				Debug.message(e.message);
+			}
+		}
+	}
+
+	function returnViews(){
+		var i;
+		Song_views = [];
+		for(i = 0; i < HRClass.HRGetDataJSON.data.comment.commentlist.count; i++){
+			Song_views[i] = %[];
+			Song_views[i].username = HRClass.HRGetDataJSON.data.comment.commentlist[i].nick;
+			Song_views[i].viewtext = HRClass.HRGetDataJSON.data.comment.commentlist[i].rootcommentcontent;
+			Song_views[i].userpicture = HRClass.HRGetDataJSON.data.comment.commentlist[i].avatarurl;
+			Song_views[i].time = HRClass.HRGetDataJSON.data.comment.commentlist[i].time;
+		}
+		getViewsListStatus = "COMPLETED";
+		Debug.message("return Song views list: "+Song_views);
+	}
+
+	function getMusiclrc(song_mid ,save = false, filename = System.createUUID(), savePath = System.exePath + "Download", utf8 = true){
+		getLrcStatus = "UNINITIALIZED";
+		var url = API_URL_root + "getLyric?songmid="+song_mid;
+		Song_LrcSave = save;
+		Song_LrcSaveUTF8 = utf8;
+		filename = filename.replace(addressCheck,"_");
+		Song_LrcSaveFilename = filename;
+		Song_LrcSavePath = savePath;
+		HRClass.open("GET",url);
+		getLrcStatus = "OPEN";
+		HRClass.send(HRClass.HRGetData);
+		getLrcStatus = "SEND";
+		returnSongLrcTimer.enabled = 1;
+		Debug.message("Url:" + url);
+	}
+
+	//普通（48)	标准（96） 标准（128） 较高（192） 极高（320）
+	//无损（ape） 无损（flac） Hi-Res（flac） DSD（dff）
+	var MusicDownload_savePath;
+	function getMusicDownload(song_mid, filename = System.createUUID(), br = 320, savePath = System.exePath + "Download/"){
+		DownloadMusicStatus = "UNINITIALIZED";
+		//var url = URL_root + "url?id="+song_mid+"&quality="+br;
+		var url = "http://api.ac130.top:3300/song/url?id=" + song_mid + "&type=" + br;
+		HRClass.open("GET",url);
+		DownloadMusicStatus = "OPEN";
+		if(!Storages.isExistentStorage(savePath)){
+			var text = [];
+			text[0] = "This is the download path.";
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("下载目录设置可能有误，请检查下载目录");
+				return 0;
+			}
+		}
+		if ( br == "48" || br == "96"){
+			if (Storages.extractStorageExt(filename) !== ".m4a")
+				filename = filename + ".m4a";
+		}
+		if ( br == "128" || br == "192" || br == "320"){
+			if (Storages.extractStorageExt(filename) !== ".mp3")
+				filename = filename + ".mp3";
+		}
+		if ( br.indexOf("flac") !== -1){
+			if (Storages.extractStorageExt(filename) !== ".flac")
+				filename = filename + ".flac";
+		}
+		if ( br.indexOf("ape") !== -1){
+			if (Storages.extractStorageExt(filename) !== ".ape")
+				filename = filename + ".ape";
+		}
+		filename = filename.replace(addressCheck,"_");
+		MusicDownload_savePath = savePath + filename;
+		try{
+			HRClass.send(HRClass.HRGetData);
+		}catch(e){
+			Debug.message(e.message);
+			System.inform("与服务器通信时出现了错误，文件错误，可能是文件被锁定或路径无法访问，请重启程序后重试");
+		}
+		DownloadMusicStatus = "SEND";
+		DownloadMusicTimer.enabled = 1;
+		Debug.message("Url:" + url);
+		return savePath + filename;
+	}
+
+	function DownloadMusic(savePath = MusicDownload_savePath){
+		if(HRClass.HRGetDataJSON.result == "100" && HRClass.HRGetDataJSON.data != void && HRClass.HRGetDataJSON.data.trim() !== ""){
+			DownloadMusicStatus = "OPEN 2";
+			var url = HRClass.HRGetDataJSON.data;
+			HRClass.open("GET", url);
+			HRClass.send(void, savePath);
+			DownloadMusicStatus = "SEND 2";
+			Debug.message("Url:" + url);
+			return savePath;
+		}else{
+			System.inform(HRClass.HRGetDataJSON.result + ":" + HRClass.HRGetDataJSON.errMsg);
+			return HRClass.HRGetDataJSON.result;
+		}
+	}
+
+	function getMusicPicDownload(song_mid, filename = song_mid, savePath = System.exePath + "Temp/"){
+		DownloadMusicPicStatus = "UNINITIALIZED";
+		var url = "http://y.gtimg.cn/music/photo_new/T002R300x300M000" + song_mid + ".jpg";
+		HRClass.open("GET",url);
+		DownloadMusicPicStatus = "OPEN";
+		if(!Storages.isExistentStorage(savePath)){
+			var text = [];
+			text[0] = "This is the Temp path.";
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("下载目录设置可能有误，请检查下载目录");
+				return 0;
+			}
+			try{
+				Storages.setFileAttributes(savePath, FILE_ATTRIBUTE_HIDDEN);
+			}catch(e){
+				Debug.message(e.message);
+			}
+		}
+		if (Storages.extractStorageExt(filename) !== ".jpg")
+			filename = filename + ".jpg";
+		filename = filename.replace(addressCheck,"_");
+		try{
+			HRClass.send(void, savePath + filename);
+		}catch(e){
+			Debug.message(e.message);
+			System.inform("与服务器通信时出现了错误，文件错误，可能是文件被锁定或路径无法访问，请重启程序后重试");
+		}
+		DownloadMusicPicStatus = "SEND";
+		DownloadMusicPicTimer.enabled = 1;
+		Debug.message("Url:" + url);
+		return savePath + filename;
+	}
+	
+	var MVDownload_MV_mid;
+	var MVDownload_MVUrl;
+	var MVDownload_filename;
+	var MVDownload_r;
+	var MVDownload_savePath;
+	var MVDownloadURLCheckTimer = new Timer(getMVURLCheck,"");
+	MVDownloadURLCheckTimer.enabled = 0;
+	MVDownloadURLCheckTimer.interval = 10;
+	function getMVDownload( mv_mid, filename = System.createUUID(), r = 720, savePath = System.exePath + "Download_MV"){
+		MVDownload_MV_mid = mv_mid;
+		MVDownload_MVUrl = "";
+		MVDownload_filename = filename;
+		MVDownload_savePath = savePath;
+		MVDownload_r = r;
+		DownloadMVStatus = "UNINITIALIZED";
+		var url = 'https://u.y.qq.com/cgi-bin/musicu.fcg?data={"getMvUrl":{"module":"gosrf.Stream.MvUrlProxy","method":"GetMvUrls","param":{"vids":["' + mv_mid + '"],"request_typet":10001}}}&format=json';
+		HRClass.open("GET",url);
+		DownloadMVStatus = "OPEN";
+		HRClass.send(HRClass.HRGetData);
+		DownloadMVStatus = "SEND";
+		MVDownloadURLCheckTimer.enabled = 1;
+		Debug.message("Url:" + url);
+	}
+
+	function getMVURLCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
+			MVDownloadURLCheckTimer.enabled = 0;
+			var r;
+			if (MVDownload_r == 360 && HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[0].freeflow_url[0] !== void){
+				r = 1;
+			}
+			if (MVDownload_r == 480 && HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[1].freeflow_url[0] !== void){
+				r = 2;
+			}
+			if (MVDownload_r == 720 && HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[2].freeflow_url[0] !== void){
+				r = 3;
+			}
+			if (MVDownload_r == 1080 && HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[3].freeflow_url[0] !== void){
+				r = 4;
+			}
+			if (r == void){
+				for (var i = 4; i > -1; i--){
+					if (HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[i].freeflow_url[0] !== void){
+						r = i;
+						break;
+					}
+				}
+			}
+			MVDownload_MVUrl = HRClass.HRGetDataJSON.getMvUrl.data[MVDownload_MV_mid].mp4[r].freeflow_url[0];
+			Debug.message(MVDownload_MVUrl);
+			Debug.message("MV下载品质：" + r);
+			startMVDownload();
+		}
+	}
+
+	function startMVDownload( mv_url = MVDownload_MVUrl, filename = MVDownload_filename, savePath = MVDownload_savePath){
+		if ( mv_url == "" || typeof mv_url == void)
+			return Debug.message("下载连接不能为空，操作中止");
+		DownloadMVStatus = "UNINITIALIZED 2";
+		var url = mv_url;
+		HRClass.open("GET",url);
+		DownloadMVStatus = "OPEN 2";
+		if(!Storages.isExistentStorage(savePath)){
+			var text = [];
+			text[0] = "This is the download path.";
+			try{
+				text.save(savePath + "readme.txt");
+			}catch(e){
+				System.inform("下载目录设置可能有误，请检查下载目录");
+				return 0;
+			}
+		}
+		if (Storages.extractStorageExt(filename) !== ".mp4"){
+			filename = filename + ".mp4";
+		}
+		filename = filename.replace(addressCheck,"_");
+		try{
+			HRClass.send(void, savePath + filename);
+		}catch(e){
+			Debug.message(e.message);
+			System.inform("与服务器通信时出现了错误，文件错误，可能是文件被锁定或路径无法访问，请重启程序后重试");
+		}
+		DownloadMVStatus = "SEND 2";
+		DownloadMVTimer.enabled = 1;
+		Debug.message("Url:" + url);
+		return savePath + filename;
+	}
+
+	function getViewsList( song_mid, page = 1, pageSize = 20, type = 0, biztype = 1){
+		getViewsListStatus = "UNINITIALIZED";
+		var url = "http://api.ac130.top:3300/comment?id=" + song_mid + "&pageNo=" + page + "&pageSize=" + pageSize + "&type=" + type+ "&biztype=" + biztype;
+		HRClass.open("GET",url);
+		getViewsListStatus = "OPEN";
+		HRClass.send(HRClass.HRGetData);
+		getViewsListStatus = "SEND";
+		returnViewsTimer.enabled = 1;
+		Debug.message("Url:" + url);
+	}
+
+	function downloadMVCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
+			DownloadMVTimer.enabled = 0;
+			DownloadMVStatus = "COMPLETED";
+			Debug.message(HRClass.HRGetData);
+		}
+	}
+
+	function downloadSongCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
+			DownloadMusicTimer.enabled = 0;
+			DownloadMusicStatus = "COMPLETED 1";
+			Debug.message(HRClass.HRGetData);
+			DownloadMusic();
+		}
+	}
+
+	function downloadSongPicCheck(){
+		if (HRClass.readyState == global.HttpRequest.LOADED && HRClass.HRGetData !== void){
+			DownloadMusicPicTimer.enabled = 0;
+			DownloadMusicPicStatus = "COMPLETED";
+			Debug.message(HRClass.HRGetData);
+		}
+	}
+
+	property onProgressPercent{
+		getter {
+			return HRClass.HRProgressPercent;
+		}
+	}
+
+	property onProgressLeftTime{
+		getter{
+			return HRClass.HRProgressLeftTime;
+		}
+	}
+}
+
+return 1; //API成功被读取
