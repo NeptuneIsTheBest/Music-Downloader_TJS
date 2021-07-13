@@ -37,7 +37,7 @@ LRC歌词
 ### 请尽情使用吧！
 ---
 ## 🍋关于&感谢
-Copyright (C) 2015 一个二百五2 All Rights Reserved.版权所有  
+Copyright (C) 2015 NeptuneIsTheBest All Rights Reserved.版权所有  
 KSoundPlayer Plugin API by khjxiaogu  
   
 ### 使用了开源项目：
